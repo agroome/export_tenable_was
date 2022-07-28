@@ -69,17 +69,17 @@ def delete_export_job(job_id):
     requests.delete(delete_job_url, headers=get_headers)
 
 
-def list_export_jobs():
-    jobs = search_export_jobs()
-    for job in jobs:
-        pprint(get_export_details(job['job_uuid']))
+# def list_export_jobs():
+#     jobs = search_export_jobs()
+#     for job in jobs:
+#         pprint(get_export_details(job['job_uuid']))
 
 
-def delete_export_jobs():
-    jobs = search_export_jobs()
-    for job in jobs:
-        print(f'DELETING JOB: {job}')
-        delete_export_job(job['job_uuid'])
+# def delete_export_jobs():
+#     jobs = search_export_jobs()
+#     for job in jobs:
+#         print(f'DELETING JOB: {job}')
+#         delete_export_job(job['job_uuid'])
 
 
 def download_job(job_details):
@@ -115,35 +115,38 @@ def export_was_findings(asset_names, filename, format='csv', fields=WAS_FIELDS, 
     }
 
     results = requests.post(export_url, headers=post_headers, json=payload)
-    job_id = results.json()['id']
-
-    while True:
-        job_details = get_export_details(job_id)
-        pprint(job_details)
-        if job_details['job_status'] != 'running':
-            break
-        sleep(POLL_INTERVAL_SECONDS)
-
-
-    if job_details['job_status'] != 'complete':
-        print(f"downloading {job_details['filename']}")
-        download_job(job_details)
-        print(f"download complete.")
+    if results.ok:
+        job_id = results.json()['id']
+    
+        while True:
+            job_details = get_export_details(job_id)
+            if job_details['job_status'] != 'running':
+                break
+            sleep(POLL_INTERVAL_SECONDS)
+    
+    
+        if job_details['job_status'] != 'complete':
+            print(f"downloading {job_details['filename']}")
+            download_job(job_details)
+            print(f"download complete.")
+        else:
+            print(f'export status: {job_details["job_status"]}')
+    
+        delete_export_job(job_id)
     else:
-        print(f'export status: {job_details["job_status"]}')
+        print(f'{results.status_code}: {results.reason}')
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--filename', required=True, help='output filenamme')
-    parser.add_argument('-o', '--output-format', choices=['csv', 'json'], default='csv', help='output format')
+    parser.add_argument('-o', '--output-format', choices=['csv', 'json'], default='csv', help='output format, defaults to csv')
     parser.add_argument('-a', '--asset-list', required=True, help='comma separated list for asset filter')
 
     args = parser.parse_args()
     asset_list = args.asset_list.replace(' ', '').split(',')
 
-    print(f'format: {args.output_format}')
-    print(f'assets: {asset_list}')
+    print(f'export assets to {args.output_format}: {asset_list}')
 
     export_was_findings(asset_list, args.filename, args.output_format)
 
